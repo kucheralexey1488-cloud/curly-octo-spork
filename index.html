@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tactical FPS Arena - 3D Clean Edition</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #070b12; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 25px; color: #e0fbfc; z-index: 10;
+        }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; }
+        .panel {
+            background: rgba(10, 17, 30, 0.85); border: 1px solid rgba(43, 114, 110, 0.5);
+            padding: 12px 20px; border-radius: 8px; backdrop-filter: blur(6px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+        .stat-val { font-size: 24px; font-weight: 800; color: #66fcf1; letter-spacing: 1px; }
+        .stat-label { font-size: 11px; color: #83c5be; text-transform: uppercase; margin-bottom: 2px; }
+        
+        .weapon-hud {
+            position: absolute; bottom: 30px; right: 30px; text-align: right;
+            background: rgba(10, 17, 30, 0.9); border: 1px solid rgba(43, 114, 110, 0.6);
+            padding: 15px 25px; border-radius: 10px; backdrop-filter: blur(8px);
+        }
+        .ammo-counter { font-size: 42px; font-weight: 900; color: #fff; font-family: monospace; }
+        .ammo-max { font-size: 20px; color: #83c5be; }
+        .weapon-name { font-size: 14px; color: #66fcf1; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+
+        .health-hud {
+            position: absolute; bottom: 30px; left: 30px; width: 300px;
+            background: rgba(10, 17, 30, 0.9); border: 1px solid rgba(43, 114, 110, 0.6);
+            padding: 15px; border-radius: 10px; backdrop-filter: blur(8px);
+        }
+        .health-bar-bg { width: 100%; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; margin-top: 6px; }
+        .health-bar-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #e63946, #45fb94); transition: width 0.3s ease; }
+
+        /* Crosshair for hip fire */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 14px; height: 14px; pointer-events: none; z-index: 25;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: rgba(102, 252, 241, 0.9); box-shadow: 0 0 4px rgba(0,0,0,0.8);
+        }
+        #crosshair::before { top: 6px; left: 0; width: 14px; height: 2px; }
+        #crosshair::after { top: 0; left: 6px; width: 2px; height: 14px; }
+
+        #ads-scope {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            pointer-events: none; display: none; z-index: 20;
+        }
+        .scope-dot { width: 6px; height: 6px; background: #ff3333; border-radius: 50%; position: absolute; top: -3px; left: -3px; box-shadow: 0 0 10px #ff0000; }
+        
+        #awp-scope-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: none; z-index: 21; background: radial-gradient(circle, transparent 30%, rgba(2,5,10,0.98) 55%);
+        }
+        .scope-line-h { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: rgba(0,0,0,0.8); }
+        .scope-line-v { position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: rgba(0,0,0,0.8); }
+
+        .overlay-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 8, 15, 0.92); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100; pointer-events: auto;
+            transition: opacity 0.3s ease;
+        }
+        h1 { font-size: 48px; color: #66fcf1; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 3px; text-shadow: 0 0 20px rgba(102, 252, 241, 0.4); }
+        p { color: #83c5be; font-size: 16px; margin-bottom: 30px; text-align: center; max-width: 600px; line-height: 1.5; }
+        .btn {
+            background: linear-gradient(135deg, #1f4068, #162447); border: 2px solid #66fcf1;
+            color: #66fcf1; padding: 16px 40px; font-size: 18px; font-weight: 700;
+            border-radius: 8px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+            transition: all 0.2s ease; box-shadow: 0 0 15px rgba(102, 252, 241, 0.2);
+        }
+        .btn:hover { background: #66fcf1; color: #0b0c10; box-shadow: 0 0 25px rgba(102, 252, 241, 0.6); transform: scale(1.05); }
+
+        #banner {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 17, 30, 0.95); border: 1px solid #66fcf1; padding: 15px 35px;
+            border-radius: 8px; color: #66fcf1; font-size: 18px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 2px; display: none; box-shadow: 0 0 30px rgba(102, 252, 241, 0.4); z-index: 50;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <div id="crosshair"></div>
+    <div id="banner">ВРАГ УНИЧТОЖЕН! СОБЕРИТЕ ЛУТ И НАЖМИТЕ [ENTER]</div>
+
+    <div id="ads-scope"><div class="scope-dot"></div></div>
+    <div id="awp-scope-overlay">
+        <div class="scope-line-h"></div>
+        <div class="scope-line-v"></div>
+    </div>
+
+    <div id="hud">
+        <div class="top-bar">
+            <div class="panel">
+                <div class="stat-label">Уровень / Ранг</div>
+                <div class="stat-val" id="level-val">LVL 1</div>
+            </div>
+            <div class="panel" style="border-color: #e63946;">
+                <div class="stat-label">Цель (Бот)</div>
+                <div class="stat-val" id="bot-status-val" style="color: #e63946;">ОЖИДАНИЕ</div>
+            </div>
+            <div class="panel">
+                <div class="stat-label">Убито врагов</div>
+                <div class="stat-val" id="kills-val">0</div>
+            </div>
+        </div>
+        
+        <div class="health-hud">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
+                <span>ЗДОРОВЬЕ</span>
+                <span id="hp-text" style="color: #45fb94;">100 HP</span>
+            </div>
+            <div class="health-bar-bg">
+                <div class="health-bar-fill" id="hp-fill"></div>
+            </div>
+            <div style="font-size: 11px; color: #83c5be; margin-top: 8px;">
+                WASD: Движение | Shift: Слайд (КД 3с) | Ctrl: Прицел | E: Лут
+            </div>
+        </div>
+
+        <div class="weapon-hud">
+            <div class="weapon-name" id="weapon-name-ui">AK-47</div>
+            <div><span class="ammo-counter" id="ammo-cur">30</span><span class="ammo-max"> / <span id="ammo-max">150</span></span></div>
+        </div>
+    </div>
+
+    <div id="start-menu" class="overlay-screen">
+        <h1>TACTICAL FPS ARENA</h1>
+        <p>Красивые объемные 3D-модели пушек, крестик по центру экрана, зажим на автоматах, слайд на [Shift] и умные боты!</p>
+        <button class="btn" id="start-btn">НАЧАТЬ БОЙ</button>
+    </div>
+
+    <div id="gameover-menu" class="overlay-screen" style="display: none;">
+        <h1 style="color: #e63946;">ВЫ ПОГИБЛИ</h1>
+        <p id="gameover-stats">Боты оказались сильнее. Попробуйте снова!</p>
+        <button class="btn" id="restart-btn">ИГРАТЬ СНОВА</button>
+    </div>
+
+<script>
+    const WEAPONS = {
+        'AK-47': { name: 'AK-47 Assault Rifle', damage: 32, fireRate: 120, ammo: 30, maxAmmo: 150, automatic: true, adsZoom: 1.8, reticle: 'dot' },
+        'AWP': { name: 'AWP Sniper Rifle', damage: 95, fireRate: 1200, ammo: 10, maxAmmo: 40, automatic: false, adsZoom: 3.5, reticle: 'sniper' },
+        'MP5': { name: 'MP5 Submachine Gun', damage: 22, fireRate: 90, ammo: 30, maxAmmo: 180, automatic: true, adsZoom: 1.5, reticle: 'dot' },
+        'Deagle': { name: 'Desert Eagle .50AE', damage: 55, fireRate: 350, ammo: 7, maxAmmo: 35, automatic: false, adsZoom: 1.4, reticle: 'dot' },
+        'Shotgun': { name: 'Pump-Action Shotgun', damage: 85, fireRate: 950, ammo: 8, maxAmmo: 32, automatic: false, adsZoom: 1.
